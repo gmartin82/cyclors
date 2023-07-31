@@ -24,6 +24,7 @@ fn main() {
         .build();
 
     let iceoryx_lib = iceoryx.join("lib");
+    let iceoryx_include = iceoryx.join("include/iceoryx/v2.0.3");
 
     // Add iceoryx lib to link
     println!("cargo:rustc-link-search=native={}", iceoryx_lib.display());
@@ -114,8 +115,10 @@ fn main() {
     // Generate bindings
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
+        .clang_arg(format!("-I{}", iceoryx_include.to_str().unwrap()))
         .clang_arg(format!("-I{}", cyclonedds_include.to_str().unwrap()))
         .clang_arg(format!("-I{}", cyclocut_include.to_str().unwrap()))
+        .clang_arg("-DDDS_HAS_SHM=1")
         .generate_comments(false);
 
     // Add *IMAGE_TLS_DIRECTORY* to blocklist on Windows due to

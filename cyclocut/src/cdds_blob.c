@@ -16,6 +16,12 @@
 #include <string.h>
 #include "cdds/cdds_util.h"
 
+#ifdef DDS_HAS_SHM
+#include "dds/ddsi/ddsi_radmin.h"
+#include "dds/ddsi/ddsi_serdata.h"
+#include "dds/ddsrt/endian.h"
+#endif
+
 struct cdds_ddsi_payload
 {
   struct ddsi_serdata sd;
@@ -93,6 +99,23 @@ static void cdds_sertype_free_samples(
   (void)op;
 }
 
+#ifdef DDS_HAS_SHM
+static size_t cdds_sertype_get_serialized_size(
+    const struct ddsi_sertype *type, const void *sample)
+{
+  /* Not using code paths that rely on this but required to enable SHM */
+  return 0;
+}
+
+static bool cdds_sertype_serialize_into(
+    const struct ddsi_sertype *type, const void *sample,
+    void *dst_buffer, size_t dst_size)
+{
+  /* Not using code paths that rely on this but required to enable SHM */
+  return false;
+}
+#endif
+
 static const struct ddsi_sertype_ops cdds_sertype_ops = {
     .version = ddsi_sertype_v0,
     .arg = NULL,
@@ -101,7 +124,11 @@ static const struct ddsi_sertype_ops cdds_sertype_ops = {
     .realloc_samples = cdds_sertype_realloc_samples,
     .free_samples = cdds_sertype_free_samples,
     .equal = cdds_sertype_equal,
-    .hash = cdds_sertype_hash
+#ifdef DDS_HAS_SHM
+    .get_serialized_size = cdds_sertype_get_serialized_size,
+    .serialize_into = cdds_sertype_serialize_into,
+#endif
+    .hash = cdds_sertype_hash,
 
     /* Here .type_id, .type_map, .type_info and .derive_sertype are needed if we want full XTypes across the bridge */
 };
@@ -130,6 +157,11 @@ static void cdds_serdata_free(struct ddsi_serdata *sd)
   struct cdds_ddsi_payload *zp = (struct cdds_ddsi_payload *)sd;
   assert(zp != 0);
   // assert(zp->payload != 0);
+
+#ifdef DDS_HAS_SHM
+  free_iox_chunk(zp->sd.iox_subscriber, &zp->sd.iox_chunk);
+#endif
+
   free(zp->payload);
   zp->payload = 0;
   zp->size = 0;
@@ -202,9 +234,28 @@ static struct ddsi_serdata *cdds_serdata_from_ser(
   return &csd->sd;
 }
 
+#ifdef DDS_HAS_SHM
+static struct ddsi_serdata *cdds_serdata_from_iox_buffer(const struct ddsi_sertype *tpcmn, enum ddsi_serdata_kind kind, void *sub, void *iox_buffer)
+{
+  CY_DEBUG_WA("==> <cdds_serdata_from_iox_buffer> for %s\n", tpcmn->name);
+  struct cdds_ddsi_payload *zp = (struct cdds_ddsi_payload *)malloc(sizeof(struct cdds_ddsi_payload));
+  ddsi_serdata_init(&zp->sd, tpcmn, kind);
+  zp->size = 4;
+  zp->kind = kind;
+  zp->payload = malloc(zp->size);
+  char *header = zp->payload;
+  header[0] = 0;
+  header[1] = (DDSRT_ENDIAN == DDSRT_LITTLE_ENDIAN) ? 1 : 0;
+  header[2] = 0;
+  header[3] = 0;
+  zp->sd.iox_chunk = iox_buffer;
+  zp->sd.iox_subscriber = sub;
+  return (struct ddsi_serdata *)zp;
+}
+#endif
+
 static struct ddsi_serdata *cdds_serdata_to_typeless(const struct ddsi_serdata *psd)
 {
-
   CY_DEBUG("Called <cdds_serdata_to_typeless> \n");
   struct cdds_ddsi_payload *sd = (struct cdds_ddsi_payload *)psd;
   struct cdds_ddsi_payload *sd_tl = (struct cdds_ddsi_payload *)malloc(sizeof(struct cdds_ddsi_payload));
@@ -259,11 +310,15 @@ static const struct ddsi_serdata_ops cdds_serdata_ops = {
     .eqkey = cdds_serdata_eqkey,
     .from_ser = cdds_serdata_from_ser,
     .from_ser_iov = cdds_serdata_from_ser_iov,
+#ifdef DDS_HAS_SHM
+    .from_iox_buffer = cdds_serdata_from_iox_buffer,
+#endif
     .to_untyped = cdds_serdata_to_typeless,
     .to_ser = cdds_to_ser,
     .to_ser_ref = cdds_to_ser_ref,
     .to_ser_unref = cdds_to_ser_unref,
-    .free = cdds_serdata_free};
+    .free = cdds_serdata_free
+};
 
 dds_entity_t cdds_create_blob_topic(dds_entity_t dp, char *topic_name, char *type_name, bool is_keyless)
 {
