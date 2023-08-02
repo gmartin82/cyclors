@@ -15,10 +15,10 @@
 #include <limits.h>
 #include <string.h>
 #include "cdds/cdds_util.h"
-
-#ifdef DDS_HAS_SHM
 #include "dds/ddsi/ddsi_radmin.h"
 #include "dds/ddsi/ddsi_serdata.h"
+
+#ifdef DDS_HAS_SHM
 #include "dds/ddsrt/endian.h"
 #endif
 
