@@ -4,7 +4,7 @@ project(cdds-util VERSION 0.1.6)
 include(CTest)
 enable_testing()
 
-include_directories(./include $ENV{CYCLONE_INCLUDE})
+include_directories(./include $ENV{CYCLONE_INCLUDE} $ENV{ICEORYX_INCLUDE} ../cyclonedds/src/core/ddsc/src)
 link_directories($ENV{CYCLONE_LIB})
 
 if (BUILD_SHARED_LIBS OR NOT DEFINED BUILD_SHARED_LIBS)

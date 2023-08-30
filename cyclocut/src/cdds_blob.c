@@ -15,8 +15,11 @@
 #include <limits.h>
 #include <string.h>
 #include "cdds/cdds_util.h"
-#include "dds/ddsi/ddsi_radmin.h"
+#include "dds__entity.h"
+#include "dds/ddsi/ddsi_entity.h"
+#include "dds/ddsi/ddsi_endpoint.h"
 #include "dds/ddsi/ddsi_serdata.h"
+#include "dds/ddsi/q_radmin.h"
 
 
 struct cdds_ddsi_payload
@@ -171,7 +174,7 @@ static struct ddsi_serdata *cdds_serdata_from_ser_iov(const struct ddsi_sertype 
 static struct ddsi_serdata *cdds_serdata_from_ser(
     const struct ddsi_sertype *tpcmn,
     enum ddsi_serdata_kind kind,
-    const struct ddsi_rdata *fragchain, size_t size)
+    const struct nn_rdata *fragchain, size_t size)
 {
   CY_DEBUG_WA("Called <cdds_serdata_from_ser> for %s for %zu bytes\n", tpcmn->type_name, size);
   struct cdds_ddsi_payload *csd = (struct cdds_ddsi_payload *)malloc(sizeof(struct cdds_ddsi_payload));
@@ -190,7 +193,7 @@ static struct ddsi_serdata *cdds_serdata_from_ser(
     if (fragchain->maxp1 > off)
     {
       const unsigned char *payload =
-          DDSI_RMSG_PAYLOADOFF(fragchain->rmsg, DDSI_RDATA_PAYLOAD_OFF(fragchain));
+          NN_RMSG_PAYLOADOFF(fragchain->rmsg, NN_RDATA_PAYLOAD_OFF(fragchain));
       const unsigned char *src = payload + off - fragchain->min;
       uint32_t n_bytes = fragchain->maxp1 - off;
       CY_DEBUG_WA("Trying to memcpy %d bytes\n", n_bytes);
@@ -274,4 +277,38 @@ dds_entity_t cdds_create_blob_topic(dds_entity_t dp, char *topic_name, char *typ
   struct ddsi_sertype *st = (struct ddsi_sertype *)malloc(sizeof(struct ddsi_sertype));
   ddsi_sertype_init(st, type_name, &cdds_sertype_ops, &cdds_serdata_ops, is_keyless);
   return dds_create_topic_sertype(dp, topic_name, &st, NULL, NULL, NULL);
+}
+
+dds_return_t dds_get_entity_sertype (dds_entity_t entity, const struct ddsi_sertype **sertype)
+{
+  dds_return_t ret;
+  dds_entity *e;
+
+  if (!sertype)
+    return DDS_RETCODE_BAD_PARAMETER;
+  if ((ret = dds_entity_pin (entity, &e)) != DDS_RETCODE_OK)
+    return ret;
+  switch (dds_entity_kind (e))
+  {
+    case DDS_KIND_TOPIC: {
+      struct dds_topic * const tp = (struct dds_topic *) e;
+      *sertype = tp->m_stype;
+      break;
+    }
+    case DDS_KIND_READER: {
+      struct dds_reader * const rd = (struct dds_reader *) e;
+      *sertype = rd->m_rd->type;
+      break;
+    }
+    case DDS_KIND_WRITER: {
+      struct dds_writer * const wr = (struct dds_writer *) e;
+      *sertype = wr->m_wr->type;
+      break;
+    }
+    default:
+      ret = DDS_RETCODE_ILLEGAL_OPERATION;
+      break;
+  }
+  dds_entity_unpin (e);
+  return ret;
 }

@@ -15,6 +15,13 @@ fn main() {
     let mut cyclonedds = cmake::Config::new("cyclonedds");
     let mut cyclonedds = cyclonedds.out_dir(cyclonedds_dir);
 
+    // Create cyclocut build directory and initial config
+    let cyclocut_dir = out_dir.join("cyclocut-build");
+    dir_builder.create(&cyclocut_dir).unwrap();
+
+    let mut cyclocut = cmake::Config::new("cyclocut");
+    let mut cyclocut = cyclocut.out_dir(cyclocut_dir);
+
     // Create initial bindings builder
     let mut bindings = bindgen::Builder::default();
 
@@ -52,6 +59,9 @@ fn main() {
             .env("iceoryx_hoofs_DIR", iceoryx_install_path)
             .env("iceoryx_posh_DIR", iceoryx_install_path)
             .define("ENABLE_SHM", "YES");
+
+        cyclocut = cyclocut
+            .env("ICEORYX_INCLUDE", iceoryx_include.clone());
 
         bindings = bindings
             .clang_arg(format!("-I{}", iceoryx_include.to_str().unwrap()))
@@ -106,26 +116,23 @@ fn main() {
     #[cfg(target_os = "windows")]
     println!("cargo:rustc-link-lib=DbgHelp");
 
-    // Build cyclocut
-    let cyclocut_dir = out_dir.join("cyclocut-build");
-    dir_builder.create(&cyclocut_dir).unwrap();
-    let mut cyclocut = cmake::Config::new("cyclocut");
-
     // Force compilation of Cyclocut in release mode on Windows due to
     // https://github.com/rust-lang/rust/issues/39016
     #[cfg(all(debug_assertions, target_os = "windows"))]
-    let cyclocut = cyclocut.profile("Release");
+    {
+        cyclocut = cyclocut.profile("Release");
+    }
 
-    let cyclocut = cyclocut
+    cyclocut = cyclocut
         .env("CYCLONE_INCLUDE", &cyclonedds_include)
         .env("CYCLONE_LIB", &cyclonedds_lib)
         .define("CYCLONE_INCLUDE", cyclonedds_include.clone())
         .define("CYCLONE_LIB", cyclonedds_lib.clone())
         .define("BUILD_SHARED_LIBS", "OFF")
-        .define("CMAKE_INSTALL_LIBDIR", "lib")
-        .out_dir(cyclocut_dir)
-        .build();
+        .define("CMAKE_INSTALL_LIBDIR", "lib");
 
+    let cyclocut = cyclocut.build();
+    
     let cyclocut_include = cyclocut.join("include");
     let cyclocut_lib = cyclocut.join("lib");
 
