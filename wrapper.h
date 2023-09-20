@@ -3,6 +3,7 @@
 #include <dds/dds.h>
 #include <dds/ddsi/ddsi_serdata.h>
 #include <dds/ddsi/ddsi_typelib.h>
+#include <dds/ddsi/ddsi_xt_typeinfo.h>
 
 #ifdef DDS_HAS_SHM
 #include <dds/ddsc/dds_loan_api.h>
